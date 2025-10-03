@@ -42,12 +42,19 @@ function init() {
 }
 
 function encode(str) {
-  return window.btoa(unescape(encodeURIComponent(str)));
+  return window.btoa(String.fromCharCode(...new TextEncoder().encode(str)));
 }
 
 function decode(str) {
-  return decodeURIComponent(escape(window.atob(str)));
+  try {
+    return new TextDecoder().decode(
+      Uint8Array.from(window.atob(str), (c) => c.charCodeAt(0))
+    );
+  } catch {
+    return "";
+  }
 }
+
 
 function update() {
   const html = $html.value;
@@ -66,18 +73,24 @@ const createHtml = ({ html, css, js }) => {
     .replace(/<\/script>/gi, "<\\/script>")
     .replace(/\/\/# sourceMappingURL=.*$/gm, "");
 
+  const safeHtml = html.replace(/<\/script>/gi, "<\\/script>");
+
   return `
     <html>
       <head>
-        <style>${css}</style>
+        <meta charset="utf-8" />
+        <style>${css || ""}</style>
       </head>
       <body>
-        ${html}
+        ${safeHtml}
         <script type="module">
         try {
           ${cleanJS}
         } catch (err) {
           console.error("Error en tu JS:", err);
+          document.body.insertAdjacentHTML("beforeend", 
+            "<pre style='color:red'>Error en tu JS: " + err.message + "</pre>"
+          );
         }
         </script>
       </body>
