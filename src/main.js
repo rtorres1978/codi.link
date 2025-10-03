@@ -57,15 +57,18 @@ function decode(str) {
 
 
 function update() {
-  const html = $html.value;
-  const css = $css.value;
-  const js = $js.value;
-
-  const hashedCode = `${encode(html)}|${encode(css)}|${encode(js)}`;
-  window.history.replaceState(null, null, `#${hashedCode}`);
-
-  const finalhtml = createHtml({ html, css, js });
-  $("iframe").setAttribute("srcdoc", finalhtml);
+  clearTimeout(timer);
+  timer = setTimeout(() => {
+    const html = $html.value;
+    const css = $css.value;
+    const js = $js.value;
+  
+    const hashedCode = `${encode(html)}|${encode(css)}|${encode(js)}`;
+    window.history.replaceState(null, null, `#${hashedCode}`);
+  
+    const finalhtml = createHtml({ html, css, js });
+    $("iframe").setAttribute("srcdoc", finalhtml);
+  }, 500)
 }
 
 const createHtml = ({ html, css, js }) => {
