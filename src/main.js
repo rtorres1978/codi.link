@@ -1,104 +1,100 @@
 import "./style.css";
 import Split from "split-grid";
+import * as monaco from "monaco-editor";
 
-const $ = (selector) => document.querySelector(selector);
+import HtmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
+import CssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker";
+import TsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
+import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+
+self.MonacoEnvironment = {
+  getWorker(_, label) {
+    if (label === "css") return new CssWorker();
+    if (label === "html") return new HtmlWorker();
+    if (label === "typescript" || label === "javascript") return new TsWorker();
+    return new EditorWorker();
+  },
+};
+
+const $ = (sel) => document.querySelector(sel);
+
 Split({
   columnGutters: [{ track: 1, element: $(".gutter-col-1") }],
   rowGutters: [{ track: 1, element: $(".gutter-row-1") }],
 });
 
-const $js = $("#js");
-const $css = $("#css");
-const $html = $("#html");
+const hash = window.location.hash.slice(1);
+const [rawHtml, rawCss, rawJs] = hash.split("|");
+const decode = (str) =>
+  str
+    ? new TextDecoder().decode(
+        Uint8Array.from(window.atob(str), (c) => c.charCodeAt(0))
+      )
+    : "";
 
-$js.addEventListener("input", update);
-$css.addEventListener("input", update);
-$html.addEventListener("input", update);
+const html = decode(rawHtml);
+const css = decode(rawCss);
+const js = decode(rawJs);
 
-function safeAtob(str) {
-  try {
-    return str ? window.atob(str) : "";
-  } catch {
-    return "";
-  }
-}
+// ---- Crear editores ----
+const htmlEditor = monaco.editor.create($("#html"), {
+  value: html || "<h1>Hola 👋</h1>",
+  language: "html",
+  theme: "vs-dark",
+});
 
-function init() {
-  const hash = window.location.hash.slice(1);
-  if (!hash) return;
+const cssEditor = monaco.editor.create($("#css"), {
+  value: css || "body { font-family: sans-serif; }",
+  language: "css",
+  theme: "vs-dark",
+});
 
-  const [rawHtml, rawCss, rawJs] = hash.split("|");
+const jsEditor = monaco.editor.create($("#js"), {
+  value: js || "console.log('Hello World');",
+  language: "javascript",
+  theme: "vs-dark",
+});
 
-  const html = decode(rawHtml);
-  const css = decode(rawCss);
-  const js = decode(rawJs);
-
-  $html.value = html;
-  $css.value = css;
-  $js.value = js;
-
-  const finalhtml = createHtml({ html, css, js });
-  $("iframe").setAttribute("srcdoc", finalhtml);
-}
-
-function encode(str) {
-  return window.btoa(String.fromCharCode(...new TextEncoder().encode(str)));
-}
-
-function decode(str) {
-  try {
-    return new TextDecoder().decode(
-      Uint8Array.from(window.atob(str), (c) => c.charCodeAt(0))
-    );
-  } catch {
-    return "";
-  }
-}
-
-
+// ---- Actualizar preview ----
+let timer;
 function update() {
   clearTimeout(timer);
   timer = setTimeout(() => {
-    const html = $html.value;
-    const css = $css.value;
-    const js = $js.value;
-  
-    const hashedCode = `${encode(html)}|${encode(css)}|${encode(js)}`;
-    window.history.replaceState(null, null, `#${hashedCode}`);
-  
-    const finalhtml = createHtml({ html, css, js });
-    $("iframe").setAttribute("srcdoc", finalhtml);
-  }, 500)
+    const html = htmlEditor.getValue();
+    const css = cssEditor.getValue();
+    const js = jsEditor.getValue();
+
+    const encode = (str) =>
+      window.btoa(String.fromCharCode(...new TextEncoder().encode(str)));
+
+    const hashed = `${encode(html)}|${encode(css)}|${encode(js)}`;
+    window.history.replaceState(null, null, `#${hashed}`);
+
+    $("iframe").setAttribute("srcdoc", createHtml({ html, css, js }));
+  }, 400);
 }
 
-const createHtml = ({ html, css, js }) => {
-  const cleanJS = js
-    .replace(/<\/script>/gi, "<\\/script>")
-    .replace(/\/\/# sourceMappingURL=.*$/gm, "");
+[htmlEditor, cssEditor, jsEditor].forEach((ed) =>
+  ed.onDidChangeModelContent(update)
+);
 
-  const safeHtml = html.replace(/<\/script>/gi, "<\\/script>");
+// ---- Generar HTML final ----
+function createHtml({ html, css, js }) {
 
   return `
+    <!DOCTYPE html>
     <html>
       <head>
-        <meta charset="utf-8" />
-        <style>${css || ""}</style>
+        <style>${css}</style>
       </head>
       <body>
-        ${safeHtml}
-        <script type="module">
-        try {
-          ${cleanJS}
-        } catch (err) {
-          console.error("Error en tu JS:", err);
-          document.body.insertAdjacentHTML("beforeend", 
-            "<pre style='color:red'>Error en tu JS: " + err.message + "</pre>"
-          );
-        }
+        ${html}
+        <script>
+          ${js}
         </script>
       </body>
     </html>
   `;
-};
+}
 
-init();
+$("iframe").setAttribute("srcdoc", createHtml({ html, css, js }));
